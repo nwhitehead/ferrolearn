@@ -9,3 +9,8 @@ description = "A scikit-learn equivalent for Rust — re-export crate"
 
 [dependencies]
 ferrolearn-core.workspace = true
+ferrolearn-linear.workspace = true
+ferrolearn-preprocess.workspace = true
+ferrolearn-metrics.workspace = true
+ferrolearn-model-sel.workspace = true
+ferrolearn-sparse.workspace = true
