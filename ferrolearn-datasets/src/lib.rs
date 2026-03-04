@@ -24,5 +24,5 @@ pub use toy::{load_breast_cancer, load_diabetes, load_digits, load_iris, load_wi
 // Re-export synthetic generators at the crate root.
 pub use generators::{
     make_blobs, make_circles, make_classification, make_moons, make_regression, make_s_curve,
-    make_swiss_roll,
+    make_sparse_uncorrelated, make_swiss_roll,
 };

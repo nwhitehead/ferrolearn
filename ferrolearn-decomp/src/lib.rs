@@ -41,12 +41,18 @@
 //! assert_eq!(projected.ncols(), 1);
 //! ```
 
+pub mod factor_analysis;
+pub mod fast_ica;
+pub mod incremental_pca;
 pub mod kernel_pca;
 pub mod nmf;
 pub mod pca;
 pub mod truncated_svd;
 
 // Re-exports
+pub use factor_analysis::{FactorAnalysis, FittedFactorAnalysis};
+pub use fast_ica::{Algorithm, FastICA, FittedFastICA, NonLinearity};
+pub use incremental_pca::{FittedIncrementalPCA, IncrementalPCA};
 pub use kernel_pca::{FittedKernelPCA, Kernel, KernelPCA};
 pub use nmf::{FittedNMF, NMF, NMFInit, NMFSolver};
 pub use pca::{FittedPCA, PCA};

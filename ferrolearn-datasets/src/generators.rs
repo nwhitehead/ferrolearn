@@ -823,6 +823,105 @@ where
 }
 
 // ---------------------------------------------------------------------------
+// make_sparse_uncorrelated
+// ---------------------------------------------------------------------------
+
+/// Generate a regression dataset with sparse, uncorrelated features.
+///
+/// Only the first 5 features are informative (with fixed weights
+/// `[1, 2, 3, 4, 5]`); all remaining features are independent Gaussian noise.
+/// This dataset is designed for testing feature-selection algorithms.
+///
+/// # Parameters
+///
+/// - `n_samples` — number of samples to generate (must be ≥ 1).
+/// - `n_features` — total number of features (must be ≥ 5).
+/// - `random_state` — optional RNG seed for reproducibility.
+///
+/// # Returns
+///
+/// `(X, y)` where `X` has shape `(n_samples, n_features)` and `y` is the
+/// continuous regression target computed as:
+///
+/// ```text
+/// y = 1*X[:,0] + 2*X[:,1] + 3*X[:,2] + 4*X[:,3] + 5*X[:,4]
+/// ```
+///
+/// All features are drawn independently from N(0, 1).
+///
+/// # Errors
+///
+/// - [`FerroError::InvalidParameter`] if `n_samples == 0` or
+///   `n_features < 5`.
+///
+/// # Examples
+///
+/// ```rust
+/// use ferrolearn_datasets::make_sparse_uncorrelated;
+///
+/// let (x, y) = make_sparse_uncorrelated::<f64>(100, 10, Some(0)).unwrap();
+/// assert_eq!(x.shape(), &[100, 10]);
+/// assert_eq!(y.len(), 100);
+/// ```
+pub fn make_sparse_uncorrelated<F>(
+    n_samples: usize,
+    n_features: usize,
+    random_state: Option<u64>,
+) -> Result<(Array2<F>, Array1<F>), FerroError>
+where
+    F: Float + Send + Sync + 'static,
+{
+    if n_samples == 0 {
+        return Err(FerroError::InvalidParameter {
+            name: "n_samples".into(),
+            reason: "must be at least 1".into(),
+        });
+    }
+    if n_features < 5 {
+        return Err(FerroError::InvalidParameter {
+            name: "n_features".into(),
+            reason: format!("must be at least 5, got {n_features}"),
+        });
+    }
+
+    let mut rng = make_rng(random_state);
+
+    let feature_dist = Normal::new(0.0_f64, 1.0).map_err(|e| FerroError::InvalidParameter {
+        name: "feature_distribution".into(),
+        reason: e.to_string(),
+    })?;
+
+    // Fixed informative weights for the first 5 features.
+    let weights = [1.0_f64, 2.0, 3.0, 4.0, 5.0];
+
+    let mut x_data: Vec<F> = Vec::with_capacity(n_samples * n_features);
+    let mut y_data: Vec<F> = Vec::with_capacity(n_samples);
+
+    for _ in 0..n_samples {
+        let row: Vec<f64> = (0..n_features)
+            .map(|_| feature_dist.sample(&mut rng))
+            .collect();
+
+        // Target = sum of (weight_i * feature_i) for the first 5 features.
+        let target: f64 = weights.iter().enumerate().map(|(i, &w)| w * row[i]).sum();
+
+        for &v in &row {
+            x_data.push(F::from(v).unwrap_or(F::zero()));
+        }
+        y_data.push(F::from(target).unwrap_or(F::zero()));
+    }
+
+    let x = Array2::from_shape_vec((n_samples, n_features), x_data).map_err(|e| {
+        FerroError::SerdeError {
+            message: format!("make_sparse_uncorrelated reshape failed: {e}"),
+        }
+    })?;
+    let y = Array1::from_vec(y_data);
+
+    Ok((x, y))
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1283,5 +1382,94 @@ mod tests {
         let (x, t) = make_s_curve::<f64>(1, 0.0, Some(0)).unwrap();
         assert_eq!(x.shape(), &[1, 3]);
         assert_eq!(t.len(), 1);
+    }
+
+    // --- make_sparse_uncorrelated ---
+
+    #[test]
+    fn test_make_sparse_uncorrelated_shape() {
+        let (x, y) = make_sparse_uncorrelated::<f64>(100, 10, Some(0)).unwrap();
+        assert_eq!(x.shape(), &[100, 10]);
+        assert_eq!(y.len(), 100);
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_reproducible() {
+        let (x1, y1) = make_sparse_uncorrelated::<f64>(50, 8, Some(42)).unwrap();
+        let (x2, y2) = make_sparse_uncorrelated::<f64>(50, 8, Some(42)).unwrap();
+        assert_eq!(x1, x2);
+        assert_eq!(y1, y2);
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_different_seeds() {
+        let (x1, _) = make_sparse_uncorrelated::<f64>(50, 8, Some(1)).unwrap();
+        let (x2, _) = make_sparse_uncorrelated::<f64>(50, 8, Some(999)).unwrap();
+        assert_ne!(x1, x2, "different seeds should produce different data");
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_target_from_first_5_features() {
+        // With no noise the target must equal the linear combination of the
+        // first 5 features with fixed weights [1, 2, 3, 4, 5].
+        let (x, y) = make_sparse_uncorrelated::<f64>(20, 5, Some(7)).unwrap();
+        let weights = [1.0_f64, 2.0, 3.0, 4.0, 5.0];
+        for i in 0..20 {
+            let expected: f64 = weights
+                .iter()
+                .enumerate()
+                .map(|(j, &w)| w * x[[i, j]])
+                .sum();
+            let diff = (y[i] - expected).abs();
+            assert!(diff < 1e-9, "row {i}: expected {expected}, got {}", y[i]);
+        }
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_informative_features_only() {
+        // The target should depend only on the first 5 features regardless of
+        // extra noise columns. Verify by recomputing the target from X directly.
+        let (x, y) = make_sparse_uncorrelated::<f64>(30, 10, Some(10)).unwrap();
+
+        let weights = [1.0_f64, 2.0, 3.0, 4.0, 5.0];
+        for i in 0..30 {
+            let expected: f64 = weights
+                .iter()
+                .enumerate()
+                .map(|(j, &w)| w * x[[i, j]])
+                .sum();
+            assert!(
+                (y[i] - expected).abs() < 1e-9,
+                "row {i}: expected {expected}, got {}",
+                y[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_invalid_n_samples_zero() {
+        assert!(make_sparse_uncorrelated::<f64>(0, 10, None).is_err());
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_invalid_n_features_too_small() {
+        assert!(make_sparse_uncorrelated::<f64>(10, 4, None).is_err());
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_f32() {
+        let (x, y) = make_sparse_uncorrelated::<f32>(30, 7, Some(5)).unwrap();
+        assert_eq!(x.shape(), &[30, 7]);
+        assert_eq!(y.len(), 30);
+        assert!(x.iter().all(|v| v.is_finite()));
+        assert!(y.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn test_make_sparse_uncorrelated_exactly_5_features() {
+        // n_features == 5 should be valid.
+        let (x, y) = make_sparse_uncorrelated::<f64>(20, 5, Some(3)).unwrap();
+        assert_eq!(x.shape(), &[20, 5]);
+        assert_eq!(y.len(), 20);
     }
 }
