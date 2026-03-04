@@ -519,7 +519,7 @@ dependencies = [
  "approx 0.5.1",
  "ferrolearn-core",
  "float-cmp",
- "kani-verifier",
+ "kani-verifier 0.67.0",
  "ndarray",
  "num-traits",
  "serde_json",
@@ -586,6 +586,7 @@ version = "0.1.0"
 dependencies = [
  "approx 0.5.1",
  "ferrolearn-core",
+ "kani-verifier 0.56.0",
  "ndarray",
  "num-traits",
  "sprs",
@@ -854,6 +855,17 @@ name = "itoa"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
+
+[[package]]
+name = "kani-verifier"
+version = "0.56.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5c62ff9aa4abb9d8dbf4df00d078fe474dce90385eeb600933c55d05d89c0bc"
+dependencies = [
+ "anyhow",
+ "home",
+ "os_info",
+]
 
 [[package]]
 name = "kani-verifier"
@@ -1919,9 +1931,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.0.3+spec-1.1.0"
+version = "1.0.4+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7614eaf19ad818347db24addfa201729cf2a9b6fdfd9eb0ab870fcacc606c0c"
+checksum = "c94c3321114413476740df133f0d8862c61d87c8d26f04c6841e033c8c80db47"
 dependencies = [
  "indexmap",
  "serde_core",
