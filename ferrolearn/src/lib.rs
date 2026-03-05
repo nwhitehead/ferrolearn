@@ -26,3 +26,18 @@ pub use ferrolearn_core::{
     Backend, Dataset, DefaultBackend, FerroError, FerroResult, Fit, FitTransform, PartialFit,
     Predict, Transform,
 };
+
+/// Convenience prelude that re-exports the most commonly used traits and types.
+///
+/// ```rust
+/// use ferrolearn::prelude::*;
+/// ```
+pub mod prelude {
+    pub use ferrolearn_core::pipeline::Pipeline;
+    pub use ferrolearn_core::{
+        Backend, Dataset, DefaultBackend, FerroError, FerroResult, Fit, FitTransform, PartialFit,
+        Predict, Transform,
+    };
+    pub use ferrolearn_core::introspection::{HasClasses, HasCoefficients, HasFeatureImportances};
+    pub use ferrolearn_core::streaming::StreamingFitter;
+}
