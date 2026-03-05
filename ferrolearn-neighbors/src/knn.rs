@@ -46,6 +46,7 @@ use ferrolearn_core::pipeline::{FittedPipelineEstimator, PipelineEstimator};
 use ferrolearn_core::traits::{Fit, Predict};
 use ndarray::{Array1, Array2};
 use num_traits::Float;
+use rayon::prelude::*;
 
 use crate::balltree::BallTree;
 use crate::kdtree::{self, KdTree};
@@ -346,17 +347,40 @@ impl<F: Float + Send + Sync + 'static> Predict<Array2<F>> for FittedKNeighborsCl
         }
 
         let n_samples = x.nrows();
-        let mut predictions = Array1::<usize>::zeros(n_samples);
 
-        for i in 0..n_samples {
-            let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
-            let neighbors =
-                find_neighbors(&self.x_train, &query, self.n_neighbors, &self.spatial_index);
+        // Use a threshold to avoid Rayon overhead on small inputs.
+        const PAR_THRESHOLD: usize = 256;
 
-            predictions[i] = self.weighted_vote(&neighbors);
-        }
+        let predictions_vec: Vec<usize> = if n_samples >= PAR_THRESHOLD {
+            (0..n_samples)
+                .into_par_iter()
+                .map(|i| {
+                    let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
+                    let neighbors = find_neighbors(
+                        &self.x_train,
+                        &query,
+                        self.n_neighbors,
+                        &self.spatial_index,
+                    );
+                    self.weighted_vote(&neighbors)
+                })
+                .collect()
+        } else {
+            (0..n_samples)
+                .map(|i| {
+                    let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
+                    let neighbors = find_neighbors(
+                        &self.x_train,
+                        &query,
+                        self.n_neighbors,
+                        &self.spatial_index,
+                    );
+                    self.weighted_vote(&neighbors)
+                })
+                .collect()
+        };
 
-        Ok(predictions)
+        Ok(Array1::from_vec(predictions_vec))
     }
 }
 
@@ -634,17 +658,40 @@ impl<F: Float + Send + Sync + 'static> Predict<Array2<F>> for FittedKNeighborsRe
         }
 
         let n_samples = x.nrows();
-        let mut predictions = Array1::<F>::zeros(n_samples);
 
-        for i in 0..n_samples {
-            let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
-            let neighbors =
-                find_neighbors(&self.x_train, &query, self.n_neighbors, &self.spatial_index);
+        // Use a threshold to avoid Rayon overhead on small inputs.
+        const PAR_THRESHOLD: usize = 256;
 
-            predictions[i] = self.weighted_mean(&neighbors);
-        }
+        let predictions_vec: Vec<F> = if n_samples >= PAR_THRESHOLD {
+            (0..n_samples)
+                .into_par_iter()
+                .map(|i| {
+                    let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
+                    let neighbors = find_neighbors(
+                        &self.x_train,
+                        &query,
+                        self.n_neighbors,
+                        &self.spatial_index,
+                    );
+                    self.weighted_mean(&neighbors)
+                })
+                .collect()
+        } else {
+            (0..n_samples)
+                .map(|i| {
+                    let query: Vec<F> = (0..n_features).map(|j| x[[i, j]]).collect();
+                    let neighbors = find_neighbors(
+                        &self.x_train,
+                        &query,
+                        self.n_neighbors,
+                        &self.spatial_index,
+                    );
+                    self.weighted_mean(&neighbors)
+                })
+                .collect()
+        };
 
-        Ok(predictions)
+        Ok(Array1::from_vec(predictions_vec))
     }
 }
 
